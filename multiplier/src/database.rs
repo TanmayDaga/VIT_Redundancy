@@ -182,28 +182,22 @@
 //     Ok(())
 // }
 
-use std::sync::Mutex;
 
+use crate::utils;
 use mysql::prelude::*;
 use mysql::*;
 use num_traits::FromPrimitive;
 use once_cell::sync::Lazy;
 use rust_decimal::Decimal;
-use crate::utils;
 
-
-static DB_POOL: Lazy<Mutex<Pool>> = Lazy::new(|| {
+static DB_POOL: Lazy<Pool> = Lazy::new(|| {
     let url = "mysql://tanmay:12345678@localhost:3306/tanmaydaga";
     let pool = Pool::new(url).expect("Failed to connect to DB");
-    Mutex::new(pool)
+    pool
 });
 
 fn get_db_conn() -> PooledConn {
-    DB_POOL
-        .lock()
-        .unwrap()
-        .get_conn()
-        .expect("Failed to get conn")
+    DB_POOL.get_conn().expect("Failed to get conn")
 }
 
 pub fn create_table(table_name: &str) {
@@ -222,15 +216,12 @@ pub fn create_table(table_name: &str) {
     conn.query_drop(&query).unwrap();
 
     // CREATING PROCEDURE
-    
+
     query = utils::INSERT_QUERY.replace("TANMAY", table_name);
     conn.query_drop(&query).unwrap();
-
-
-
 }
 
-pub fn insert_numbers(num_a: f32, num_b: f32, result: f32 ) -> Result<(), &'static str> {
+pub fn insert_numbers(num_a: f32, num_b: f32, result: f32) -> Result<(), &'static str> {
     let mut conn = get_db_conn();
     let dec_num_a = Decimal::from_f32(num_a).unwrap();
     let dec_num_b = Decimal::from_f32(num_b).unwrap();
@@ -239,13 +230,15 @@ pub fn insert_numbers(num_a: f32, num_b: f32, result: f32 ) -> Result<(), &'stat
     conn.exec_drop(
         "CALL ProcessTanmay(:a, :b, :r)",
         params! {
-            
+
             "a" => dec_num_a,
             "b" => dec_num_b,
             "r" => dec_result,
         },
     )
-    .unwrap();
-
+    .map_err(|e| {
+        eprintln!("DB Error: {}", e);
+        "DB INSERTION Failed"
+    })?;
     Ok(())
 }
