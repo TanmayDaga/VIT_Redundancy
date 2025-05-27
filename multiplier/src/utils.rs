@@ -78,53 +78,38 @@
 
 use once_cell::sync::Lazy;
 
-const SCALE: u8 = 5; // Increased scale for more precision with f64
+const SCALE: u8 = 7; // Increased scale for more precision with f64
 
 pub static INSERT_QUERY: Lazy<String> = Lazy::new(|| {
     format!(
-        r#"WITH input_params AS (
-            SELECT
-                $1::NUMERIC(1000,12) AS val_a_in,
-                $2::NUMERIC(1000,12) AS val_b_in,
-                $3::NUMERIC(1000,12) AS val_r_in,
-                $4::TEXT AS l_in,
-                $5::TEXT AS m_in
-        ),
-        rounded_params AS (
-            SELECT
-                ROUND(val_a_in, {scale}) AS final_a,
-                ROUND(val_b_in, {scale}) AS final_b,
-                ROUND(val_r_in, {scale}) AS final_r,
-                l_in AS final_l,
-                m_in AS final_m
-            FROM input_params
-        ),
-        -- Perform the existence check and retrieve the ID of the row to update
-        row_to_update AS (
-            SELECT t.id
-            FROM TANMAY t, rounded_params rp
-            WHERE ROUND(t.result, {scale}) = rp.final_r
-              AND t.layer_name = rp.final_l
-              AND t.model_name = rp.final_m
-              AND (
-                    (ROUND(t.number_a, {scale}) = rp.final_a AND ROUND(t.number_b, {scale}) = rp.final_b) OR
-                    (ROUND(t.number_a, {scale}) = rp.final_b AND ROUND(t.number_b, {scale}) = rp.final_a)
-                  )
-            LIMIT 1 -- Ensure we target at most one row for update
-        ),
-        -- Attempt to update the row if one was found
-        updated_row AS (
-            UPDATE TANMAY
-            SET count = count + 1
-            WHERE id = (SELECT id FROM row_to_update) -- This will not update if row_to_update is empty (id would be NULL)
-            RETURNING id -- We need to know if an update actually happened
-        )
-        -- Insert a new row if the update did not occur (i.e., updated_row CTE is empty)
-        INSERT INTO TANMAY (number_a, number_b, result, count, layer_name, model_name)
-        SELECT rp.final_a, rp.final_b, rp.final_r, 1, rp.final_l, rp.final_m
-        FROM rounded_params rp
-        WHERE NOT EXISTS (SELECT 1 FROM updated_row);
-        "#,
-        scale = SCALE
+        r#"CREATE PROCEDURE IF NOT EXISTS ProcessTanmay(IN p_a DECIMAL(14,9), IN p_b DECIMAL(14,9), IN p_r DECIMAL(14,9))
+
+BEGIN
+    DECLARE val_a_in DECIMAL(14,9);
+    DECLARE val_b_in DECIMAL(14,9);
+    DECLARE val_r_in DECIMAL(14,9);
+    DECLARE existing_id INT;
+
+    SET val_a_in = ROUND(p_a, {p_scale});
+    SET val_b_in = ROUND(p_b, {p_scale});
+    SET val_r_in = ROUND(p_r, {p_scale});
+
+    SELECT id INTO existing_id FROM TANMAY
+    WHERE ROUND(result, {p_scale}) = val_r_in
+      AND (
+            (ROUND(number_a, {p_scale}) = val_a_in OR ROUND(number_b, {p_scale}) = val_b_in)
+          )
+    LIMIT 1;
+
+    IF existing_id IS NOT NULL THEN
+        UPDATE TANMAY
+        SET count = count + 1
+        WHERE id = existing_id;
+    ELSE
+        INSERT INTO TANMAY (number_a, number_b, result, count)
+        VALUES (val_a_in, val_b_in, val_r_in, 1);
+    END IF;
+END;"#,
+        p_scale = SCALE
     )
 });

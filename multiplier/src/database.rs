@@ -118,66 +118,134 @@
 // //         .unwrap();
 // // }
 
-use std::sync::{Mutex, MutexGuard};
+// use std::sync::{Mutex, MutexGuard};
 
+// use num_traits::FromPrimitive;
+// use once_cell::sync::Lazy;
+// use postgres::{Client, NoTls};
+// use rust_decimal::Decimal;
+
+// use crate::utils::INSERT_QUERY;
+
+// static DB_CLIENT: Lazy<Mutex<Client>> = Lazy::new(|| {
+//     let client = Client::connect(
+//         "host=localhost user=postgres password=tanmaydaga dbname=postgres",
+//         NoTls,
+//     )
+//     .expect("DB connection failed");
+//     Mutex::new(client)
+// });
+
+// fn get_db_client() -> MutexGuard<'static, Client> {
+//     // MutexGuard is not Send, cannot be held across .await
+//     DB_CLIENT.lock().unwrap()
+// }
+
+// pub fn init() -> Result<(), postgres::Error> {
+//     get_db_client().batch_execute(
+//         " CREATE TABLE IF NOT EXISTS TANMAY (
+//              id SERIAL PRIMARY KEY,
+//              number_a NUMERIC,     -- Removed precision and scale for flexibility with f32/f64
+//              number_b NUMERIC,     -- Removed precision and scale
+//              result   NUMERIC,     -- Removed precision and scale
+//              count BIGINT,
+//              layer_name TEXT,
+//              model_name TEXT
+//         )",
+//     )?;
+//     Ok(())
+// }
+
+// pub fn insert_numbers(
+//     num_a: f32,
+//     num_b: f32,
+//     result: f32,
+//     layer_name: &str,
+//     model_name: &str,
+// ) -> Result<(), postgres::Error> {
+//     let mut client = get_db_client();
+//     // Convert all f32 to Decimal
+//     let dec_num_a = Decimal::from_f32(num_a).unwrap();
+//     let dec_num_b = Decimal::from_f32(num_b).unwrap();
+//     let dec_result = Decimal::from_f32(result).unwrap();
+
+//     client.execute(
+//         &*INSERT_QUERY, // You must declare this as a `static` string in `utils`
+//         &[
+//             &dec_num_a,
+//             &dec_num_b,
+//             &dec_result,
+//             &layer_name,
+//             &model_name,
+//         ],
+//     )?;
+//     Ok(())
+// }
+
+use std::sync::Mutex;
+
+use mysql::prelude::*;
+use mysql::*;
 use num_traits::FromPrimitive;
 use once_cell::sync::Lazy;
-use postgres::{Client, NoTls};
 use rust_decimal::Decimal;
+use crate::utils;
 
-use crate::utils::INSERT_QUERY;
 
-static DB_CLIENT: Lazy<Mutex<Client>> = Lazy::new(|| {
-    let client = Client::connect(
-        "host=localhost user=postgres password=tanmaydaga dbname=postgres",
-        NoTls,
-    )
-    .expect("DB connection failed");
-    Mutex::new(client)
+static DB_POOL: Lazy<Mutex<Pool>> = Lazy::new(|| {
+    let url = "mysql://root:root@localhost:3306/tempdb";
+    let pool = Pool::new(url).expect("Failed to connect to DB");
+    Mutex::new(pool)
 });
 
-fn get_db_client() -> MutexGuard<'static, Client> {
-    // MutexGuard is not Send, cannot be held across .await
-    DB_CLIENT.lock().unwrap()
+fn get_db_conn() -> PooledConn {
+    DB_POOL
+        .lock()
+        .unwrap()
+        .get_conn()
+        .expect("Failed to get conn")
 }
 
-pub fn init() -> Result<(), postgres::Error> {
-    get_db_client().batch_execute(
-        " CREATE TABLE IF NOT EXISTS TANMAY (
-             id SERIAL PRIMARY KEY,
-             number_a NUMERIC,     -- Removed precision and scale for flexibility with f32/f64
-             number_b NUMERIC,     -- Removed precision and scale
-             result   NUMERIC,     -- Removed precision and scale
-             count BIGINT,
-             layer_name TEXT,
-             model_name TEXT
-        )",
-    )?;
-    Ok(())
+pub fn create_table(table_name: &str) {
+    let mut query = format!(
+        r"CREATE TABLE IF NOT EXISTS {} (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            number_a DECIMAL(14,9),
+            number_b DECIMAL(14,9),
+            result DECIMAL(14,9),
+            count BIGINT)
+        ",
+        table_name
+    );
+
+    let mut conn = get_db_conn();
+    conn.query_drop(&query).unwrap();
+
+    // CREATING PROCEDURE
+    
+    query = utils::INSERT_QUERY.replace("TANMAY", table_name);
+    conn.query_drop(&query).unwrap();
+
+
+
 }
 
-pub fn insert_numbers(
-    num_a: f32,
-    num_b: f32,
-    result: f32,
-    layer_name: &str,
-    model_name: &str,
-) -> Result<(), postgres::Error> {
-    let mut client = get_db_client();
-    // Convert all f32 to Decimal
+pub fn insert_numbers(num_a: f32, num_b: f32, result: f32 ) -> Result<(), &'static str> {
+    let mut conn = get_db_conn();
     let dec_num_a = Decimal::from_f32(num_a).unwrap();
     let dec_num_b = Decimal::from_f32(num_b).unwrap();
     let dec_result = Decimal::from_f32(result).unwrap();
 
-    client.execute(
-        &*INSERT_QUERY, // You must declare this as a `static` string in `utils`
-        &[
-            &dec_num_a,
-            &dec_num_b,
-            &dec_result,
-            &layer_name,
-            &model_name,
-        ],
-    )?;
+    conn.exec_drop(
+        "CALL ProcessTanmay(:a, :b, :r)",
+        params! {
+            
+            "a" => dec_num_a,
+            "b" => dec_num_b,
+            "r" => dec_result,
+        },
+    )
+    .unwrap();
+
     Ok(())
 }

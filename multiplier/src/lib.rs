@@ -217,7 +217,8 @@ use logger::CHANNEL;
 //     Ok(())
 // }
 
-use rayon::prelude::*;
+use rayon::{ThreadPoolBuilder, prelude::*};
+use utils::INSERT_QUERY;
 
 #[pyfunction]
 fn mat_mul<'b>(
@@ -230,8 +231,9 @@ fn mat_mul<'b>(
     let a_cols = matrix_a[0].len();
     let b_rows = matrix_b.len();
     let b_cols = matrix_b[0].len();
-    let layer_name_arc: Arc<String> = Arc::from(layer_name);
-    let model_name_arc: Arc<String> = Arc::from(model_name);
+    let table_name = Arc::new(format!("TANMAY_{}_{}", layer_name, model_name));
+
+    let pool = ThreadPoolBuilder::new().num_threads(10).build().unwrap();
 
     if a_rows == 0 || b_rows == 0 {
         // return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
@@ -254,46 +256,41 @@ fn mat_mul<'b>(
         .map(|j| (0..b_rows).map(|i| matrix_b[i][j]).collect())
         .collect();
 
-    let result: Vec<Vec<f32>> = matrix_a
-        .par_iter()
-        .map(|row_a| {
-            matrix_b_t
-                .par_iter()
-                .map(|col_b| {
-                    let mut sum = 0f32;
-                    let mut logs = vec![];
+    database::create_table(&table_name);
 
-                    for (a, b) in row_a.iter().zip(col_b.iter()) {
-                        let prod = *a * *b;
-                        logs.push((prod, *a, *b)); // Storing prod, a, b
-                        sum = sum + prod;
-                    }
+    pool.install(|| {
+        let result: Vec<Vec<f32>> = matrix_a
+            .par_iter()
+            .map(|row_a| {
+                matrix_b_t
+                    .par_iter()
+                    .map(|col_b| {
+                        let mut sum = 0f32;
+                        let mut logs = vec![];
 
-                    // Send to queue instead of direct logging
-                    if let Some(tx) = &*CHANNEL.lock().unwrap() {
-                        let _ = tx.send((
-                            logs,
-                            Arc::clone(&layer_name_arc),
-                            Arc::clone(&model_name_arc),
-                        ));
-                    }
-                    sum
-                })
-                .collect()
-        })
-        .collect();
+                        for (a, b) in row_a.iter().zip(col_b.iter()) {
+                            let prod = *a * *b;
+                            logs.push((prod, *a, *b)); // Storing prod, a, b
+                            sum = sum + prod;
+                        }
 
-    Ok(result)
+                        // Send to queue instead of direct logging
+                        if let Some(tx) = &*CHANNEL.lock().unwrap() {
+                            let _ = tx.send(logs);
+                        }
+                        sum
+                    })
+                    .collect()
+            })
+            .collect();
+
+        Ok(result)
+    })
 }
 
 #[pyfunction]
 pub fn init() -> PyResult<()> {
-    logger::init().map_err(|e| {
-        pyo3::exceptions::PyRuntimeError::new_err(format!(
-            "Failed to initialize logger and database: {}",
-            e
-        ))
-    })?;
+    logger::init();
     Ok(())
 }
 
