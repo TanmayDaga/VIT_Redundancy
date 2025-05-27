@@ -193,7 +193,7 @@ use crate::utils;
 
 
 static DB_POOL: Lazy<Mutex<Pool>> = Lazy::new(|| {
-    let url = "mysql://root:root@localhost:3306/tempdb";
+    let url = "mysql://tanmay:12345678@localhost:3306/tanmaydaga";
     let pool = Pool::new(url).expect("Failed to connect to DB");
     Mutex::new(pool)
 });
