@@ -90,7 +90,7 @@ pub static STOP_FLAG: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
 pub static HANDLES: Lazy<Mutex<Vec<JoinHandle<()>>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 pub fn init() {
-    let (tx, rx): (Sender<Vec<(f32, f32, f32)>>, Receiver<Vec<(f32, f32, f32)>>) = bounded(1000000);
+    let (tx, rx): (Sender<Vec<(f32, f32, f32)>>, Receiver<Vec<(f32, f32, f32)>>) = bounded(100000000);
 
     *CHANNEL.lock().unwrap() = Some(tx);
     STOP_FLAG.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -101,7 +101,7 @@ pub fn init() {
 
     let mut handles = Vec::new();
 
-    for _ in 0..20 {
+    for _ in 0..22 {
         let thread_rx = arc_rx.clone();
         let handle = thread::spawn(move || {
             while !STOP_FLAG.load(std::sync::atomic::Ordering::SeqCst) {

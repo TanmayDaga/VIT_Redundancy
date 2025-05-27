@@ -233,7 +233,7 @@ fn mat_mul<'b>(
     let b_cols = matrix_b[0].len();
     let table_name = Arc::new(format!("TANMAY_{}_{}", layer_name, model_name));
 
-    let pool = ThreadPoolBuilder::new().num_threads(10).build().unwrap();
+    let pool = ThreadPoolBuilder::new().num_threads(12).build().unwrap();
 
     if a_rows == 0 || b_rows == 0 {
         // return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
