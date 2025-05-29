@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
 use pyo3::prelude::*;
 
@@ -227,13 +227,16 @@ fn mat_mul<'b>(
     layer_name: String,
     model_name: String,
 ) -> PyResult<Vec<Vec<f32>>> {
+
+    let no_of_threads:u8 = env::var("NO_OF_PROCESSING_THREADS").unwrap().parse().unwrap();
+
     let a_rows = matrix_a.len();
     let a_cols = matrix_a[0].len();
     let b_rows = matrix_b.len();
     let b_cols = matrix_b[0].len();
     let table_name = Arc::new(format!("TANMAY_{}_{}", layer_name, model_name));
 
-    let pool = ThreadPoolBuilder::new().num_threads(12).build().unwrap();
+    let pool = ThreadPoolBuilder::new().num_threads(no_of_threads as usize).build().unwrap();
 
     if a_rows == 0 || b_rows == 0 {
         // return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
@@ -290,6 +293,7 @@ fn mat_mul<'b>(
 
 #[pyfunction]
 pub fn init() -> PyResult<()> {
+    dotenv::dotenv().ok();
     logger::init();
     Ok(())
 }

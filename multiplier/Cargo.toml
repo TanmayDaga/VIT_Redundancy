@@ -15,4 +15,4 @@ crossbeam = "0.8.4"
 mysql = "24"
 rust_decimal = { version = "1.37", features = ["db-diesel-mysql"] }
 rayon = "1.10.0"
-
+dotenv = "0.15.0"

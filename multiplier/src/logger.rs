@@ -73,11 +73,13 @@
 // }
 
 use std::{
+    env,
     sync::{Arc, Mutex, atomic::AtomicBool},
     thread::{self, JoinHandle},
 };
 
 use crossbeam::channel::{Receiver, Sender, bounded};
+use dotenv::dotenv;
 use once_cell::sync::Lazy;
 use pyo3::pyfunction;
 
@@ -90,7 +92,14 @@ pub static STOP_FLAG: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
 pub static HANDLES: Lazy<Mutex<Vec<JoinHandle<()>>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 pub fn init() {
-    let (tx, rx): (Sender<Vec<(f32, f32, f32)>>, Receiver<Vec<(f32, f32, f32)>>) = bounded(100000000);
+    let no_of_unbounded_items: usize = env::var("NO_OF_UNBOUNDED_ITEMS").unwrap().parse().unwrap();
+    let no_of_threads: u8 = env::var("NO_OF_RECIEVING_THREADS")
+        .unwrap()
+        .parse()
+        .unwrap();
+
+    let (tx, rx): (Sender<Vec<(f32, f32, f32)>>, Receiver<Vec<(f32, f32, f32)>>) =
+        bounded(no_of_unbounded_items);
 
     *CHANNEL.lock().unwrap() = Some(tx);
     STOP_FLAG.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -101,7 +110,7 @@ pub fn init() {
 
     let mut handles = Vec::new();
 
-    for _ in 0..22 {
+    for _ in 0..no_of_threads {
         let thread_rx = arc_rx.clone();
         let handle = thread::spawn(move || {
             while !STOP_FLAG.load(std::sync::atomic::Ordering::SeqCst) {

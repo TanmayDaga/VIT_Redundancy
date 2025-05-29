@@ -182,6 +182,7 @@
 //     Ok(())
 // }
 
+use std::env;
 
 use crate::utils;
 use mysql::prelude::*;
@@ -191,8 +192,8 @@ use once_cell::sync::Lazy;
 use rust_decimal::Decimal;
 
 static DB_POOL: Lazy<Pool> = Lazy::new(|| {
-    let url = "mysql://tanmay:12345678@localhost:3306/tanmaydaga";
-    let pool = Pool::new(url).expect("Failed to connect to DB");
+    let url = env::var("DB_URI").unwrap();
+    let pool = Pool::new(url.as_ref()).expect("Failed to connect to DB");
     pool
 });
 
