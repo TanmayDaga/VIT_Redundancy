@@ -84,7 +84,7 @@ use once_cell::sync::Lazy;
 use pyo3::pyfunction;
 
 use crate::database;
-pub static CHANNEL: Lazy<Mutex<Option<Sender<Vec<(f32, f32, f32)>>>>> =
+pub static CHANNEL: Lazy<Mutex<Option<Sender<(Vec<(f32, f32, f32)>, Arc<String>)>>>> =
     Lazy::new(|| Mutex::new(None));
 
 pub static STOP_FLAG: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
@@ -98,8 +98,10 @@ pub fn init() {
         .parse()
         .unwrap();
 
-    let (tx, rx): (Sender<Vec<(f32, f32, f32)>>, Receiver<Vec<(f32, f32, f32)>>) =
-        bounded(no_of_unbounded_items);
+    let (tx, rx): (
+        Sender<(Vec<(f32, f32, f32)>, Arc<String>)>,
+        Receiver<(Vec<(f32, f32, f32)>, Arc<String>)>,
+    ) = bounded(no_of_unbounded_items);
 
     *CHANNEL.lock().unwrap() = Some(tx);
     STOP_FLAG.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -115,8 +117,9 @@ pub fn init() {
         let handle = thread::spawn(move || {
             while !STOP_FLAG.load(std::sync::atomic::Ordering::SeqCst) {
                 if let Ok(tuples) = thread_rx.try_recv() {
-                    for (x, y, z) in tuples {
-                        if let Err(e) = database::insert_numbers(x, y, z) {
+                    for (x, y, z) in tuples.0 {
+
+                        if let Err(e) = database::insert_numbers(x, y, z, tuples.1.as_ref()) {
                             eprintln!("Failed to insert data into database {}", e);
                         }
                     }

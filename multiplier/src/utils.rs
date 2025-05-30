@@ -78,38 +78,7 @@
 
 use once_cell::sync::Lazy;
 
-const SCALE: u8 = 7; // Increased scale for more precision with f64
+pub const SCALE: u32 = 7; // Increased scale for more precision with f64
 
-pub static INSERT_QUERY: Lazy<String> = Lazy::new(|| {
-    format!(
-        r#"CREATE PROCEDURE IF NOT EXISTS ProcessTanmay(IN p_a DECIMAL(14,9), IN p_b DECIMAL(14,9), IN p_r DECIMAL(14,9))
-
-BEGIN
-    DECLARE val_a_in DECIMAL(14,9);
-    DECLARE val_b_in DECIMAL(14,9);
-    DECLARE val_r_in DECIMAL(14,9);
-    DECLARE existing_id INT;
-
-    SET val_a_in = ROUND(p_a, {p_scale});
-    SET val_b_in = ROUND(p_b, {p_scale});
-    SET val_r_in = ROUND(p_r, {p_scale});
-
-    SELECT id INTO existing_id FROM TANMAY
-    WHERE ROUND(result, {p_scale}) = val_r_in
-      AND (
-            (ROUND(number_a, {p_scale}) = val_a_in OR ROUND(number_b, {p_scale}) = val_b_in)
-          )
-    LIMIT 1;
-
-    IF existing_id IS NOT NULL THEN
-        UPDATE TANMAY
-        SET count = count + 1
-        WHERE id = existing_id;
-    ELSE
-        INSERT INTO TANMAY (number_a, number_b, result, count)
-        VALUES (val_a_in, val_b_in, val_r_in, 1);
-    END IF;
-END;"#,
-        p_scale = SCALE
-    )
-});
+pub static INSERT_QUERY: &'static str =
+    "INSERT INTO TANMAY (number_a, number_b, result) VALUES (:a, :b, :r);";

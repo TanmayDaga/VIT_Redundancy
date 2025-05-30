@@ -182,9 +182,11 @@
 //     Ok(())
 // }
 
-use std::env;
+use std::io::Write;
+use std::sync::Arc;
+use std::{env, io};
 
-use crate::utils;
+use crate::utils::{self, INSERT_QUERY, SCALE};
 use mysql::prelude::*;
 use mysql::*;
 use num_traits::FromPrimitive;
@@ -202,39 +204,38 @@ fn get_db_conn() -> PooledConn {
 }
 
 pub fn create_table(table_name: &str) {
-    let mut query = format!(
+    let query = format!(
         r"CREATE TABLE IF NOT EXISTS {} (
             id INT AUTO_INCREMENT PRIMARY KEY,
             number_a DECIMAL(14,9),
             number_b DECIMAL(14,9),
             result DECIMAL(14,9),
-            count BIGINT)
+            count BIGINT DEFAULT 1)
         ",
         table_name
     );
 
     let mut conn = get_db_conn();
     conn.query_drop(&query).unwrap();
-
-    // CREATING PROCEDURE
-
-    query = utils::INSERT_QUERY.replace("TANMAY", table_name);
-    conn.query_drop(&query).unwrap();
 }
 
-pub fn insert_numbers(num_a: f32, num_b: f32, result: f32) -> Result<(), &'static str> {
+pub fn insert_numbers(
+    num_a: f32,
+    num_b: f32,
+    result: f32,
+    insert_query: &str,
+) -> Result<(), &'static str> {
     let mut conn = get_db_conn();
-    let dec_num_a = Decimal::from_f32(num_a).unwrap();
-    let dec_num_b = Decimal::from_f32(num_b).unwrap();
-    let dec_result = Decimal::from_f32(result).unwrap();
+    let dec_num_a = Decimal::from_f32(num_a).unwrap().round_dp(SCALE);
+    let dec_num_b = Decimal::from_f32(num_b).unwrap().round_dp(SCALE);
+    let dec_result = Decimal::from_f32(result).unwrap().round_dp(SCALE);
 
     conn.exec_drop(
-        "CALL ProcessTanmay(:a, :b, :r)",
+        insert_query,
         params! {
-
             "a" => dec_num_a,
             "b" => dec_num_b,
-            "r" => dec_result,
+            "r" => dec_result
         },
     )
     .map_err(|e| {
