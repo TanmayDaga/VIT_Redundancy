@@ -81,4 +81,4 @@ use once_cell::sync::Lazy;
 pub const SCALE: u32 = 7; // Increased scale for more precision with f64
 
 pub static INSERT_QUERY: &'static str =
-    "INSERT INTO TANMAY (number_a, number_b, result) VALUES (:a, :b, :r);";
+    "INSERT INTO TANMAY (number_a, number_b, result, `count`) VALUES (:a, :b, :r, 1);";
